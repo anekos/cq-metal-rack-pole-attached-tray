@@ -288,15 +288,15 @@ wheels = [
 
 [[package]]
 name = "click-cadquery"
-version = "0.4.0"
+version = "0.5.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "click" },
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/7f/2f/7522bc36e187bfe253bd6c021e045e01275ed5401cf699ab4302701e648b/click_cadquery-0.4.0.tar.gz", hash = "sha256:06ec86e19e39dc1ef2970616528ee1a05b08b968238a5b348fbfd2c0884ab37a", size = 4307, upload-time = "2026-08-20T23:45:25.823Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/b6/f9/c73aeb8ead0f8c0695bde4863c43d36c0903e08c342fc3fb88b624c53a56/click_cadquery-0.5.0.tar.gz", hash = "sha256:3a9285aba69783c481a664e07f064ef6b0aa9e3b7ea652d2c9a88eed2fd90a4b", size = 5223, upload-time = "2026-08-21T23:11:44.891Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d6/93/b142daf70ce7cabf83027808169677f3b3ac7abc97f25befa805cce156c6/click_cadquery-0.4.0-py3-none-any.whl", hash = "sha256:ba4e5012228510e592cab852f12d992e718138f01a3733bd2e75b69305bfd549", size = 5369, upload-time = "2026-08-20T23:45:24.482Z" },
+    { url = "https://files.pythonhosted.org/packages/ed/c9/b7809dde624ae5d9b682832dd6a7623894256eacddf919fe0443fe9b498f/click_cadquery-0.5.0-py3-none-any.whl", hash = "sha256:2940855089bb04b1a568f58d3df9d38e0feec2d7dfa7339b772a4286cec59f26", size = 6288, upload-time = "2026-08-21T23:11:43.669Z" },
 ]
 
 [[package]]
