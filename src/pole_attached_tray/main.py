@@ -15,9 +15,7 @@ class Param(BuildParam):
     )
     pole_diameter: float = Field(25.0, description="ポール (支柱) の直径 [mm]")
     thickness: float = Field(3.0, description="トレイの壁厚・固定具の腕の肉厚 [mm]")
-    height: float = Field(
-        40.0, description="Z 方向 (ポール軸方向) の高さ。トレイ・固定具で共通"
-    )
+    height: float = Field(40.0, description="トレイの Z 方向 (ポール軸方向) の高さ")
     wing_width: float = Field(
         15.0, description="固定具の耳 (結束バンド穴のある平板部) の幅 [mm]"
     )
@@ -32,7 +30,13 @@ class Param(BuildParam):
         "残りは手前に向かって front_height まで斜めに下がる",
     )
     hole_diameter: float = Field(5.0, description="結束バンド穴の直径 [mm]")
-    hole_margin: float = Field(10.0, description="結束バンド穴の上下端からの距離 [mm]")
+    hole_margin: float = Field(
+        10.0, description="結束バンド穴 (上側) の上端からの距離 [mm]"
+    )
+    hole_pitch: float = Field(
+        20.0,
+        description="上下の結束バンド穴の間隔 [mm]。height を変えても間隔は変わらない",
+    )
     spacing: float = Field(
         10.0, description="part=both のときにトレイと固定具を並べる間隔 [mm]"
     )
@@ -50,6 +54,12 @@ class Param(BuildParam):
     def hole_x(self) -> float:
         """結束バンド穴の中心の X 座標 (円弧の外径から耳の中央まで)。"""
         return self.outer_radius + self.wing_width / 2
+
+    @property
+    def holder_height(self) -> float:
+        """固定具の高さ。トレイの height とは独立で、上下の穴を hole_margin ぶんの
+        余白を持たせて収められる最小限の高さ (穴の間隔から自ずと決まる)。"""
+        return self.hole_pitch + 2 * self.hole_margin
 
     @property
     def filename(self) -> str:
@@ -93,13 +103,19 @@ def _half_cylinder(height: float, radius: float, keep_positive_y: bool) -> cq.Wo
     return cylinder.cut(cutter)
 
 
-def _wing_holes(param: Param, wall_y: float) -> cq.Workplane:
-    """左右の耳 (x = ±hole_x) に、上下 2 個ずつ、Y 軸方向に貫通する穴。"""
+def _wing_holes(param: Param, wall_y: float, part_height: float) -> cq.Workplane:
+    """左右の耳 (x = ±hole_x) に、上下 2 個ずつ、Y 軸方向に貫通する穴。
+
+    Z 位置は part_height の上端から hole_margin・hole_pitch で決まる
+    (トレイと固定具で高さが異なっても、上端をそろえれば穴は一致する)。
+    """
     r = param.hole_diameter / 2
     length = param.thickness + 2.0
+    z_top = part_height - param.hole_margin
+    z_bottom = z_top - param.hole_pitch
     holes = None
     for sx in (-1, 1):
-        for z in (param.hole_margin, param.height - param.hole_margin):
+        for z in (z_bottom, z_top):
             hole = (
                 cq.Workplane("XY")
                 .cylinder(length, r, direct=(0, 1, 0), centered=(True, True, True))
@@ -118,22 +134,25 @@ def build_holder(param: Param) -> cq.Workplane:
     pole_r = param.pole_radius
     outer_r = param.outer_radius
     half_width = outer_r + param.wing_width
+    holder_height = param.holder_height
 
     wing = cq.Workplane("XY").box(
-        2 * half_width, param.thickness, param.height, centered=(True, False, False)
+        2 * half_width, param.thickness, holder_height, centered=(True, False, False)
     )
-    outer_half = _half_cylinder(param.height, outer_r, keep_positive_y=True)
+    outer_half = _half_cylinder(holder_height, outer_r, keep_positive_y=True)
 
     result = wing.union(outer_half)
     result = result.cut(
-        cq.Workplane("XY").cylinder(param.height, pole_r, centered=(True, True, False))
+        cq.Workplane("XY").cylinder(holder_height, pole_r, centered=(True, True, False))
     )
     result = (
         result.edges("|Z")
         .edges(_VerticalEdgeAtAbsX(half_width))
         .fillet(_corner_fillet_radius(param.thickness))
     )
-    result = result.cut(_wing_holes(param, wall_y=param.thickness / 2))
+    result = result.cut(
+        _wing_holes(param, wall_y=param.thickness / 2, part_height=holder_height)
+    )
 
     return result
 
@@ -199,7 +218,7 @@ def build_tray(param: Param) -> cq.Workplane:
     result = result.cut(bore.translate((0, center_y, 0)))
 
     wall_y = param.tray_depth / 2 - param.thickness / 2
-    result = result.cut(_wing_holes(param, wall_y=wall_y))
+    result = result.cut(_wing_holes(param, wall_y=wall_y, part_height=param.height))
 
     return result
 
