@@ -37,6 +37,14 @@ class Param(BuildParam):
         20.0,
         description="上下の結束バンド穴の間隔 [mm]。height を変えても間隔は変わらない",
     )
+    divider_count_x: int = Field(
+        0,
+        description="トレイを X 方向に区切る仕切り板の枚数 (板自体は Y 方向に走る)",
+    )
+    divider_count_y: int = Field(
+        0,
+        description="トレイを Y 方向に区切る仕切り板の枚数 (板自体は X 方向に走る)",
+    )
     spacing: float = Field(
         10.0, description="part=both のときにトレイと固定具を並べる間隔 [mm]"
     )
@@ -185,6 +193,73 @@ def _tray_ramp_keep_solid(param: Param) -> cq.Workplane:
     return cq.Workplane("YZ").polyline(profile).close().extrude(over_extrude, both=True)
 
 
+def _ramp_height_at_y(param: Param, y: float) -> float:
+    """外壁の斜めプロファイル上で、指定した Y における高さを返す (_tray_ramp_keep_solid と同じ折れ線)。"""
+    half_depth = param.tray_depth / 2
+    y_top = half_depth - param.back_flat_depth
+    if y <= -half_depth:
+        return param.front_height
+    if y >= y_top:
+        return param.height
+    t = (y - (-half_depth)) / (y_top - (-half_depth))
+    return param.front_height + t * (param.height - param.front_height)
+
+
+def _spread(count: int, lo: float, hi: float) -> list[float]:
+    """区間 [lo, hi] を count+1 等分する境界のうち、内側の count 個の位置を返す。"""
+    if count <= 0:
+        return []
+    step = (hi - lo) / (count + 1)
+    return [lo + step * (i + 1) for i in range(count)]
+
+
+def _tray_dividers(param: Param) -> cq.Workplane | None:
+    """トレイ内部の仕切り板。
+
+    X 方向の板 (divider_count_x) は Y 方向に長く伸び、外壁と同じ斜めプロファイルに
+    合わせる。Y 方向の板 (divider_count_y) は X 方向に長く伸び、置かれた Y 位置での
+    外壁の高さと同じ一定の高さの平板になる。
+    """
+    inner_x_lo = -param.tray_width / 2 + param.thickness
+    inner_x_hi = param.tray_width / 2 - param.thickness
+    inner_y_lo = -param.tray_depth / 2 + param.thickness
+    inner_y_hi = param.tray_depth / 2 - param.thickness
+    t = param.thickness
+
+    panels: list[cq.Workplane] = []
+
+    for x in _spread(param.divider_count_x, inner_x_lo, inner_x_hi):
+        panel = (
+            cq.Workplane("XY")
+            .box(
+                t, inner_y_hi - inner_y_lo, param.height, centered=(True, False, False)
+            )
+            .translate((x, inner_y_lo, 0))
+            .intersect(_tray_ramp_keep_solid(param))
+        )
+        panels.append(panel)
+
+    for y in _spread(param.divider_count_y, inner_y_lo, inner_y_hi):
+        panel = (
+            cq.Workplane("XY")
+            .box(
+                inner_x_hi - inner_x_lo,
+                t,
+                _ramp_height_at_y(param, y),
+                centered=(False, True, False),
+            )
+            .translate((inner_x_lo, y, 0))
+        )
+        panels.append(panel)
+
+    if not panels:
+        return None
+    result = panels[0]
+    for panel in panels[1:]:
+        result = result.union(panel)
+    return result
+
+
 def build_tray(param: Param) -> cq.Workplane:
     """上面が開いたトレイ。背面 (+Y 側) の中央にポールを抱き込む半円柱を持つ。
 
@@ -202,6 +277,10 @@ def build_tray(param: Param) -> cq.Workplane:
     result = result.faces(">Z").shell(-param.thickness, kind="intersection")
     result = result.edges("|Z").fillet(_corner_fillet_radius(param.thickness))
     result = result.intersect(_tray_ramp_keep_solid(param))
+
+    dividers = _tray_dividers(param)
+    if dividers is not None:
+        result = result.union(dividers)
 
     # 半円柱を収める分だけ大きくくり抜いてから、ポール側 (-Y 向き) に半円柱を足す
     clearance = cq.Workplane("XY").cylinder(
