@@ -14,7 +14,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project.scripts]
-pole-attached-tray = "pole_attached_tray:main"
+app = "pole_attached_tray:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/pole_attached_tray"]
